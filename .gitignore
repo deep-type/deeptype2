@@ -1,0 +1,4 @@
+.DS_Store
+*pkl
+*pyc
+*__pycache__
