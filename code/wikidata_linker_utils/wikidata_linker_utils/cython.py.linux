@@ -1,0 +1,20 @@
+import numpy as np
+
+from os.path import realpath, dirname, join
+
+SCRIPT_DIR = dirname(realpath(__file__))
+CPP_DIR = join(SCRIPT_DIR, "cpp")
+
+def prepare_cython(pyximport):
+    old_get_distutils_extension = pyximport.pyximport.get_distutils_extension
+
+    def new_get_distutils_extension(modname, pyxfilename, language_level=None):
+        extension_mod, setup_args = old_get_distutils_extension(modname, pyxfilename, language_level)
+        extension_mod.language='c++'
+        extension_mod.extra_compile_args=["-std=c++11", "-g"]
+        extension_mod.extra_link_args=["-std=c++11"]
+        extension_mod.extra_compile_args.extend(['-O3', "-I", np.get_include(), "-I", CPP_DIR])
+        return extension_mod,setup_args
+
+    pyximport.pyximport.get_distutils_extension = new_get_distutils_extension
+    pyximport.install(setup_args={'include_dirs': [np.get_include(), CPP_DIR]})

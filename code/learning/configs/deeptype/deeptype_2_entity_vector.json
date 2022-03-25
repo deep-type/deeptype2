@@ -1,0 +1,98 @@
+local standard_datasets = (import './standard_datasets.jsonnet').datasets(train=true, test=true, oversample=10, merge_triggers=true);
+local en_xl_datasets = (import './en_xl_datasets.jsonnet').datasets(train=true, test=true);
+local lowercase_features = (import './lowercase_features.jsonnet');
+local type_interaction_features = (import './type_interaction_features.jsonnet').features;
+{
+    "datasets": en_xl_datasets + standard_datasets,
+    "features": lowercase_features + [{"type": "bio"}],
+    "objectives": [
+        {
+            "name": "type",
+            "type": "scenario",
+            "classifications": [
+                {
+                    "name": "en_reachable",
+                    "dimension": 148,
+                    "type": "projection",
+                    "model": []
+                },
+                {
+                    "name": "wikipedia_probs",
+                    "type": "wikipedia_probs",
+                    "shape": [2],
+                    "model": [
+                        {
+                            "type": "fully_connected_tanh",
+                            "size": 20
+                        },
+                        {
+                            "type": "dropout",
+                            "keep_prob": 0.7
+                        }
+                    ],
+                    "power": 0.18
+                },
+                {
+                    "name": "repeat_candidate",
+                    "type": "repeat_candidate",
+                    "shape": [1],
+                    "model": []
+                },
+                {
+                    "name": "autoregressive",
+                    "type": "predicted",
+                    "initial_state": {
+                        "function": "wikidata_linker_utils.autoregressive_type_interactions:lstm_initial_state",
+                        "args": {
+                            "kernel_size": 128
+                        }
+                    },
+                    "update": {
+                        "function": "wikidata_linker_utils.autoregressive_type_interactions:lstm_update",
+                        "args": {
+                            "kernel_size": 128,
+                            "ignored_featurizations": ["wikipedia_probs"]
+                        }
+                    },
+                    "state_to_features": {
+                        "function": "wikidata_linker_utils.autoregressive_type_interactions:lstm_to_features",
+                        "args": {
+                            "kernel_size": 128
+                        }
+                    },
+                    "direction": "ltr"
+                },
+                {
+                    "name": "past_prediction_bit",
+                    "type": "predicted",
+                    "initial_state": "wikidata_linker_utils.autoregressive_type_interactions:past_prediction_bit_initial_state",
+                    "update": "wikidata_linker_utils.autoregressive_type_interactions:past_prediction_bit_update",
+                    "state_to_features": "wikidata_linker_utils.autoregressive_type_interactions:past_prediction_bit_to_features",
+                    "direction": "ltr"
+                },
+            ] + type_interaction_features(),
+            "reorder_decoding": false,
+            "max_scenarios": 400,
+            "training_scenarios": 20,
+            "frequency_weights": [1, 1],
+            "model": [
+                {
+                    "type": "dropout",
+                    "keep_prob": 0.5
+                }
+            ],
+            "multiword_pool": {
+                "function": "wikidata_linker_utils.sequence_model:multiword_maxpool_qkv_attention_global",
+                "args": {
+                    "n_heads": 2,
+                    "keep_prob": 1.0,
+                    "size": 256
+                }
+            }
+        }
+    ],
+    "wikidata_path": "/Volumes/Samsung_T3/tahiti/2017-12/wikidata",
+    "classification_path": "/Volumes/Samsung_T3/tahiti/2017-12/fixed_classification2",
+    "trie_path": "/Volumes/Samsung_T3/tahiti/2017-12",
+    "post_process_spec": []
+}
